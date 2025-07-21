@@ -440,3 +440,35 @@ jobs:
       run: |
         echo "❌ 영상 편집 중 오류가 발생했습니다."
         echo "🔍 로그를 확인하여 문제를 해결하세요."
+
+- name: 📤 Notify Make.com Completion
+  if: success()
+  run: |
+    cd ./temp_videos
+    
+    # Make.com으로 완료 알림 전송
+    curl -X POST "${{ github.event.client_payload.webhook_url }}" \
+      -H "Content-Type: application/json" \
+      -d "{
+        \"status\": \"completed\",
+        \"product_name\": \"${{ env.PRODUCT_NAME }}\",
+        \"output_file\": \"${{ env.OUTPUT_FILE }}\",
+        \"thumbnail_file\": \"${{ env.THUMBNAIL_FILE }}\",
+        \"artifacts_url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\",
+        \"download_url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts\",
+        \"execution_id\": \"${{ github.event.client_payload.make_execution_id }}\",
+        \"file_size\": \"$(du -h ${{ env.OUTPUT_FILE }} | cut -f1)\",
+        \"duration\": \"$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 ${{ env.OUTPUT_FILE }} | awk '{printf \"%.1f\", $1}')\"
+      }"
+
+- name: 📤 Notify Make.com on Failure  
+  if: failure()
+  run: |
+    curl -X POST "${{ github.event.client_payload.webhook_url }}" \
+      -H "Content-Type: application/json" \
+      -d "{
+        \"status\": \"failed\",
+        \"error\": \"Video editing failed\",
+        \"execution_id\": \"${{ github.event.client_payload.make_execution_id }}\",
+        \"logs_url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
+      }"
