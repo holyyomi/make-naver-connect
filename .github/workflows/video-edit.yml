@@ -1,279 +1,442 @@
-name: 🎬 Holy Moment 칸 광고제급 Video Editor
+name: 🎬 Holy Moment Video Editor Workflow
 
 on:
-  repository_dispatch:
-    types: [video_edit]
+  workflow_dispatch:
+    inputs:
+      product_name:
+        description: '제품명'
+        required: true
+        type: string
+      video_1_url:
+        description: '첫 번째 영상 URL'
+        required: true
+        type: string
+      video_2_url:
+        description: '두 번째 영상 URL'
+        required: true
+        type: string
+      video_3_url:
+        description: '세 번째 영상 URL'
+        required: true
+        type: string
+      video_4_url:
+        description: '네 번째 영상 URL'
+        required: true
+        type: string
+      subtitle_style:
+        description: '자막 스타일'
+        required: false
+        default: 'premium_modern'
+        type: choice
+        options:
+        - premium_modern
+        - elegant_minimal
+        - vibrant_impact
+        - friendly_casual
+      target_audience:
+        description: '타겟 연령층'
+        required: false
+        default: '20-30대'
+        type: string
+      emotion_flow:
+        description: '영상 감정 흐름'
+        required: false
+        default: '감동적'
+        type: string
+
+env:
+  PRODUCT_NAME: ${{ github.event.inputs.product_name }}
+  DATE_TIME: ${{ github.run_id }}
 
 jobs:
-  edit-video:
+  video-editing:
+    name: 🎬 할리우드급 영상 편집
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     
     steps:
     - name: 🔧 Checkout Repository
       uses: actions/checkout@v4
-      
-    - name: 📦 Setup FFmpeg & Dependencies
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: 📦 Setup FFmpeg
+      uses: FedericoCarboni/setup-ffmpeg@v3
+      with:
+        ffmpeg-version: release
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: 🎨 Install Additional Tools
       run: |
-        sudo apt update
-        sudo apt install -y ffmpeg fonts-noto-cjk fonts-noto-cjk-extra
-        ffmpeg -version
-        echo "한글 폰트 설치 완료:"
-        fc-list | grep -i noto | head -5
+        sudo apt-get update
+        sudo apt-get install -y bc curl jq imagemagick
         
-    - name: ⬇️ Download Video Files with Fallback
+        # 한글 폰트 설치
+        sudo apt-get install -y fonts-noto-cjk fonts-noto-cjk-extra
+        fc-cache -fv
+        
+        echo "✅ 모든 도구 설치 완료"
+
+    - name: 📥 Download Video Files
       run: |
-        echo "🎬 veo3 영상 파일 다운로드 시작..."
+        echo "🔽 영상 파일 다운로드 시작"
         
-        # 각 영상 파일을 wget과 curl로 이중 안전장치 다운로드
-        for i in {0..3}; do
-          clip_num=$((i+1))
-          video_url="${{ toJson(github.event.client_payload.videos) }}"
-          video_url=$(echo "$video_url" | jq -r ".[$i]")
-          
-          echo "클립 ${clip_num} 다운로드: $video_url"
-          
-          if wget -O "clip${clip_num}.mp4" "$video_url" 2>/dev/null; then
-            echo "✅ wget으로 클립 ${clip_num} 다운로드 성공"
-          elif curl -L -o "clip${clip_num}.mp4" "$video_url" 2>/dev/null; then
-            echo "✅ curl로 클립 ${clip_num} 다운로드 성공"
-          else
-            echo "❌ 클립 ${clip_num} 다운로드 실패"
-            exit 1
-          fi
-        done
+        # 작업 디렉터리 생성
+        mkdir -p ./temp_videos
+        cd ./temp_videos
         
-        echo "📊 다운로드된 파일 확인:"
-        ls -la *.mp4
+        # 각 영상 다운로드
+        echo "📥 영상 1 다운로드..."
+        curl -L -o "clip1.mp4" "${{ github.event.inputs.video_1_url }}"
         
-    - name: 🎬 Execute Holy Moment FFmpeg Master Script
-      run: |
-        #!/bin/bash
+        echo "📥 영상 2 다운로드..."
+        curl -L -o "clip2.mp4" "${{ github.event.inputs.video_2_url }}"
         
-        # 🏆 Holy Moment 칸 광고제 그랑프리급 마스터 편집 스크립트 (GitHub Actions 최적화)
+        echo "📥 영상 3 다운로드..."
+        curl -L -o "clip3.mp4" "${{ github.event.inputs.video_3_url }}"
         
-        set -e  # 오류 시 즉시 중단
+        echo "📥 영상 4 다운로드..."
+        curl -L -o "clip4.mp4" "${{ github.event.inputs.video_4_url }}"
         
-        PRODUCT="${{ github.event.client_payload.product }}"
-        DATE=$(date +%Y%m%d_%H%M%S)
-        OUTPUT="HolyMoment_${PRODUCT}_${DATE}_CANNES_MASTERPIECE"
-        
-        echo '🎬 칸 광고제 그랑프리급 편집 시작'
-        echo '📅 날짜: '$(date)
-        echo '🎯 제품: '$PRODUCT
-        echo '📱 가로영상 → 세로영상 모바일 최적화 시작'
-        echo '⚡ GitHub Actions 무료 환경 최적화 모드'
-        
-        # ===== 1단계: 고급 파일 검증 및 분석 =====
-        echo '🔍 Step 1: 파일 검증 및 메타데이터 분석'
-        
+        # 파일 검증
         for i in {1..4}; do
           if [ ! -f "clip${i}.mp4" ]; then
-            echo "❌ 클립 ${i} 파일이 없습니다"
+            echo "❌ 클립 ${i} 다운로드 실패"
             exit 1
           fi
           
-          # 비디오 품질 검증
-          WIDTH=$(ffprobe -v quiet -select_streams v:0 -show_entries stream=width -of csv=p=0 "clip${i}.mp4")
-          HEIGHT=$(ffprobe -v quiet -select_streams v:0 -show_entries stream=height -of csv=p=0 "clip${i}.mp4")
-          DURATION=$(ffprobe -v quiet -select_streams v:0 -show_entries format=duration -of csv=p=0 "clip${i}.mp4")
+          # 파일 크기 확인
+          SIZE=$(stat -c%s "clip${i}.mp4")
+          if [ $SIZE -lt 1000000 ]; then  # 1MB 미만이면 오류
+            echo "⚠️ 클립 ${i} 파일이 너무 작습니다: ${SIZE} bytes"
+            exit 1
+          fi
           
-          echo "📊 클립 ${i}: ${WIDTH}x${HEIGHT} (가로영상), 길이: ${DURATION}초"
+          echo "✅ 클립 ${i} 다운로드 완료: $(du -h clip${i}.mp4 | cut -f1)"
         done
         
-        echo '✅ 파일 검증 완료'
+        echo "🎉 모든 영상 파일 다운로드 완료!"
+
+    - name: 🔍 Video Analysis & Validation
+      run: |
+        cd ./temp_videos
+        echo "🔍 영상 파일 분석 시작"
         
-        # ===== 2단계: 가로→세로 시네마틱 변환 및 색보정 (성능 최적화) =====
-        echo '🎨 Step 2: 가로→세로 시네마틱 변환 및 프리미엄 색보정'
-        echo '💡 veo3 가로영상을 모바일 최적화 세로영상(9:16)으로 완벽 변환'
+        # 각 영상의 메타데이터 수집
+        for i in {1..4}; do
+          echo "📊 클립 ${i} 분석 중..."
+          
+          WIDTH=$(ffprobe -v quiet -select_streams v:0 -show_entries stream=width -of csv=p=0 "clip${i}.mp4" 2>/dev/null || echo "1920")
+          HEIGHT=$(ffprobe -v quiet -select_streams v:0 -show_entries stream=height -of csv=p=0 "clip${i}.mp4" 2>/dev/null || echo "1080")
+          DURATION=$(ffprobe -v quiet -select_streams v:0 -show_entries format=duration -of csv=p=0 "clip${i}.mp4" 2>/dev/null || echo "8.0")
+          FPS=$(ffprobe -v quiet -select_streams v:0 -show_entries stream=r_frame_rate -of csv=p=0 "clip${i}.mp4" 2>/dev/null | awk -F'/' '{if($2>0) print $1/$2; else print 30}' || echo "30")
+          BITRATE=$(ffprobe -v quiet -select_streams v:0 -show_entries stream=bit_rate -of csv=p=0 "clip${i}.mp4" 2>/dev/null || echo "5000000")
+          CODEC=$(ffprobe -v quiet -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 "clip${i}.mp4" 2>/dev/null || echo "unknown")
+          
+          echo "  📐 해상도: ${WIDTH}x${HEIGHT}"
+          echo "  ⏱️  길이: ${DURATION}초"
+          echo "  🎬 FPS: ${FPS}"
+          echo "  📊 비트레이트: $((${BITRATE}/1000))kbps"
+          echo "  🔧 코덱: ${CODEC}"
+          
+          # 품질 검증
+          if (( $(echo "$DURATION < 3" | bc -l) )); then
+            echo "⚠️ 클립 ${i} 길이가 짧습니다: ${DURATION}초"
+          fi
+          
+          if [ $WIDTH -lt 720 ] || [ $HEIGHT -lt 720 ]; then
+            echo "⚠️ 클립 ${i} 해상도가 낮습니다: ${WIDTH}x${HEIGHT}"
+          fi
+        done
+        
+        echo "✅ 영상 분석 완료"
+
+    - name: 🎨 Video Normalization & Enhancement
+      run: |
+        cd ./temp_videos
+        echo "🎨 4K 품질 정규화 및 화질 향상 시작"
         
         for i in {1..4}; do
-          echo "🔧 클립 ${i} 가로→세로 변환 처리 중..."
+          echo "🔧 클립 ${i} 고급 처리 중..."
           
-          # 가로영상을 세로영상으로 변환하는 고급 필터 체인 (GitHub Actions 최적화)
-          VIDEO_FILTERS=""
+          # 최고급 비디오 필터 체인
+          VIDEO_FILTERS="scale=1920:1080:force_original_aspect_ratio=increase:eval=frame,crop=1080:1920:(iw-1080)/2:(ih-1920)/2,unsharp=luma_msize_x=7:luma_msize_y=7:luma_amount=1.5:chroma_msize_x=5:chroma_msize_y=5:chroma_amount=1.2,nlmeans=s=2.0:p=7:r=15:pc=1,hqdn3d=4:3:6:4.5,eq=contrast=1.12:brightness=0.05:saturation=1.08:gamma=0.95,colorbalance=rs=0.03:gs=-0.01:bs=-0.04:rm=0.02:gm=0.01:bm=-0.03:rh=-0.01:gh=0.01:bh=0.02,vibrance=intensity=0.15:rbal=1.2:gbal=1.0:bbal=0.9,fps=30"
           
-          # 1단계: 스마트 크롭 (가로영상의 중앙 부분을 9:16으로 추출)
-          VIDEO_FILTERS+="scale=1920:-1:force_original_aspect_ratio=increase,"
-          VIDEO_FILTERS+="crop=1080:1920:(iw-1080)/2:(ih-1920)/2,"
-          
-          # 2단계: 화질 향상 필터 (크롭 보상)
-          VIDEO_FILTERS+="unsharp=5:5:1.3:5:5:1.1,"
-          VIDEO_FILTERS+="eq=contrast=1.10:brightness=0.05:saturation=1.08:gamma=0.96,"
-          VIDEO_FILTERS+="nlmeans=s=1.5:p=5:r=10,"  # 성능 최적화
-          
-          # 3단계: 시네마틱 룩 적용 (모바일 최적화)
-          VIDEO_FILTERS+="curves=m='0/0 0.22/0.20 0.5/0.58 0.78/0.80 1/1',"
-          VIDEO_FILTERS+="colorbalance=rs=0.03:gs=-0.01:bs=-0.04:rm=0.02:gm=0.00:bm=-0.03,"
-          
-          # 4단계: 모바일 화면 최적화
-          VIDEO_FILTERS+="vibrance=intensity=0.12"
-          
-          # GitHub Actions 환경 최적화: fast preset, 적절한 CRF
           ffmpeg -i "clip${i}.mp4" \
             -vf "${VIDEO_FILTERS}" \
-            -c:v libx264 -preset fast -crf=20 -profile:v high \
-            -pix_fmt yuv420p -movflags +faststart \
-            -c:a aac -b:a 192k -ar 48000 -ac 2 \
-            -t 8.0 -avoid_negative_ts make_zero \
-            -y "converted_${i}.mp4"
+            -c:v libx264 \
+            -preset veryslow \
+            -crf 12 \
+            -profile:v high \
+            -level 5.1 \
+            -x264-params 'keyint=60:min-keyint=30:scenecut=40:bframes=3:ref=5:me=umh:subme=10:trellis=2:psy-rd=1.2,0.15:aq-mode=3:aq-strength=0.8' \
+            -pix_fmt yuv420p \
+            -movflags +faststart+write_colr \
+            -color_primaries bt709 \
+            -color_trc bt709 \
+            -colorspace bt709 \
+            -c:a aac -b:a 256k -ar 48000 -ac 2 \
+            -af 'dynaudnorm=f=500:g=31:p=0.95:s=0.5,loudnorm=I=-18:TP=-1.5:LRA=8' \
+            -t 7.8 \
+            -avoid_negative_ts make_zero \
+            -y "normalized_${i}.mp4"
           
-          echo "✅ 클립 ${i} 가로→세로 변환 완료"
+          echo "✅ 클립 ${i} 정규화 완료"
         done
         
-        # ===== 3단계: 프리미엄 한글 자막 시스템 (세로영상 최적화) =====
-        echo '📝 Step 3: 프리미엄 한글 자막 생성 (세로영상 최적화)'
+        echo "🎉 모든 클립 정규화 완료"
+
+    - name: 📝 Dynamic Subtitle Generation
+      run: |
+        cd ./temp_videos
+        echo "📝 동적 프리미엄 자막 생성 시작"
         
-        # 자막 텍스트
-        SUBTITLES=(
+        # 제품별 맞춤 자막
+        declare -a SUBTITLE_TEXTS=(
           "이렇게 힘들 줄 몰랐어..."
-          "${PRODUCT}를 만난 순간"
+          "${{ env.PRODUCT_NAME }}을(를) 만난 순간"
           "완전히 달라진 내 일상"
           "정말 감사한 Holy Moment"
         )
         
-        # 기본 자막 스타일 설정 (GitHub Actions 환경 최적화)
-        FONT_SIZE=68
-        FONT_COLOR='#FFFFFF'
-        BOX_COLOR='#000000@0.80'
-        FONT_FILE='/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc'
-        SHADOW='5:5:7:#000000@0.88'
-        BORDER=16
+        # 자막 스타일 설정
+        SUBTITLE_STYLE="${{ github.event.inputs.subtitle_style }}"
         
-        # 한글 폰트 파일 존재 확인 및 대체
+        case "$SUBTITLE_STYLE" in
+          'premium_modern')
+            FONT_SIZE=68; MAIN_COLOR='#FFFFFF'; SHADOW_COLOR='#000000@0.9'
+            BOX_COLOR='#1a1a1a@0.82'; BORDER_WIDTH=18; SHADOW_OFFSET='6:6'
+            FONT_FILE='/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc'
+            ;;
+          'elegant_minimal')
+            FONT_SIZE=62; MAIN_COLOR='#F8F8FF'; SHADOW_COLOR='#2F2F2F@0.85'
+            BOX_COLOR='#000000@0.75'; BORDER_WIDTH=14; SHADOW_OFFSET='4:4'
+            FONT_FILE='/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
+            ;;
+          'vibrant_impact')
+            FONT_SIZE=72; MAIN_COLOR='#FFD700'; SHADOW_COLOR='#800000@1.0'
+            BOX_COLOR='#000000@0.95'; BORDER_WIDTH=22; SHADOW_OFFSET='8:8'
+            FONT_FILE='/usr/share/fonts/opentype/noto/NotoSansCJK-Black.ttc'
+            ;;
+          *)
+            FONT_SIZE=65; MAIN_COLOR='#FFFFFF'; SHADOW_COLOR='#000000@0.88'
+            BOX_COLOR='#1C1C1C@0.80'; BORDER_WIDTH=16; SHADOW_OFFSET='5:5'
+            FONT_FILE='/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc'
+            ;;
+        esac
+        
+        # 폰트 파일 존재 확인 및 대체
         if [ ! -f "$FONT_FILE" ]; then
-          FONT_FILE='/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc'
-          if [ ! -f "$FONT_FILE" ]; then
-            echo "⚠️ 한글 폰트를 찾을 수 없습니다. 기본 폰트 사용."
-            FONT_FILE=''
+          echo "⚠️ 기본 폰트를 찾을 수 없음. 시스템 폰트 사용"
+          FONT_FILE=$(fc-list | grep -i "noto.*cjk.*bold" | head -1 | cut -d: -f1)
+          if [ -z "$FONT_FILE" ]; then
+            FONT_FILE="/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
           fi
         fi
         
-        # 각 클립에 프리미엄 자막 적용
+        echo "📝 사용할 폰트: $FONT_FILE"
+        
+        # 각 클립에 자막 적용
         for i in {1..4}; do
-          SUB_TEXT="${SUBTITLES[$((i-1))]}"
-          
+          SUB_TEXT="${SUBTITLE_TEXTS[$((i-1))]}"
           echo "📝 클립 ${i}에 자막 적용: ${SUB_TEXT}"
           
-          if [ -n "$FONT_FILE" ]; then
-            # 한글 폰트 사용
-            ffmpeg -i "converted_${i}.mp4" \
-              -vf "drawtext=text='${SUB_TEXT}':fontfile='${FONT_FILE}':fontsize=${FONT_SIZE}:fontcolor='${FONT_COLOR}':x=(w-text_w)/2:y=h-th-200:box=1:boxcolor='${BOX_COLOR}':boxborderw=${BORDER}:shadowcolor='${SHADOW}':shadowx=5:shadowy=5:enable='between(t,1.5,6.5)'" \
-              -c:v libx264 -preset fast -crf=20 -pix_fmt yuv420p \
-              -c:a copy -movflags +faststart \
-              -y "subtitled_${i}.mp4"
-          else
-            # 기본 폰트 사용
-            ffmpeg -i "converted_${i}.mp4" \
-              -vf "drawtext=text='${SUB_TEXT}':fontsize=${FONT_SIZE}:fontcolor='${FONT_COLOR}':x=(w-text_w)/2:y=h-th-200:box=1:boxcolor='${BOX_COLOR}':boxborderw=${BORDER}:shadowcolor='${SHADOW}':shadowx=5:shadowy=5:enable='between(t,1.5,6.5)'" \
-              -c:v libx264 -preset fast -crf=20 -pix_fmt yuv420p \
-              -c:a copy -movflags +faststart \
-              -y "subtitled_${i}.mp4"
-          fi
+          # 자막 필터 생성
+          SUBTITLE_FILTER="drawtext=text='${SUB_TEXT}':fontfile='${FONT_FILE}':fontsize=${FONT_SIZE}:fontcolor='${MAIN_COLOR}':x=(w-text_w)/2:y=h-th-160:box=1:boxcolor='${BOX_COLOR}':boxborderw=${BORDER_WIDTH}:shadowcolor='${SHADOW_COLOR}':shadowx=${SHADOW_OFFSET%:*}:shadowy=${SHADOW_OFFSET#*:}:enable='between(t,1.5,6.3)'"
+          
+          ffmpeg -i "normalized_${i}.mp4" \
+            -vf "${SUBTITLE_FILTER},fade=in:st=1.5:d=0.8:alpha=1,fade=out:st=5.5:d=0.8:alpha=1" \
+            -c:v libx264 -preset veryslow -crf 12 \
+            -pix_fmt yuv420p -movflags +faststart \
+            -c:a copy \
+            -y "subtitled_${i}.mp4"
           
           echo "✅ 클립 ${i} 자막 완료"
         done
         
-        # ===== 4단계: 할리우드급 클립 연결 (32초 완성) =====
-        echo '🎞 Step 4: 할리우드급 전환 효과로 클립 연결'
+        echo "🎉 모든 자막 생성 완료"
+
+    - name: 🎞 Hollywood-Grade Video Merging
+      run: |
+        cd ./temp_videos
+        echo "🎞 할리우드급 영상 병합 시작"
+        
+        # 전환 효과 설정
+        TRANSITION_DURATION=0.8
+        CLIP_DURATION=7.8
+        
+        # 오프셋 계산
+        OFFSET_1=$(echo "$CLIP_DURATION - $TRANSITION_DURATION" | bc -l)
+        OFFSET_2=$(echo "$OFFSET_1 * 2 + $TRANSITION_DURATION" | bc -l)
+        OFFSET_3=$(echo "$OFFSET_1 * 3 + $TRANSITION_DURATION * 2" | bc -l)
+        
+        echo "📊 타이밍 설정:"
+        echo "  전환 시간: ${TRANSITION_DURATION}초"
+        echo "  클립 길이: ${CLIP_DURATION}초"
+        echo "  오프셋 1: ${OFFSET_1}초"
+        echo "  오프셋 2: ${OFFSET_2}초"
+        echo "  오프셋 3: ${OFFSET_3}초"
         
         ffmpeg -i subtitled_1.mp4 -i subtitled_2.mp4 -i subtitled_3.mp4 -i subtitled_4.mp4 \
           -filter_complex "
-          [0:v]setpts=PTS-STARTPTS,scale=1080:1920,fps=30[v0];
-          [1:v]setpts=PTS-STARTPTS,scale=1080:1920,fps=30[v1];
-          [2:v]setpts=PTS-STARTPTS,scale=1080:1920,fps=30[v2];
-          [3:v]setpts=PTS-STARTPTS,scale=1080:1920,fps=30[v3];
-          [v0][v1]xfade=transition=smoothleft:duration=0.8:offset=7.2[vf01];
-          [vf01][v2]xfade=transition=smoothright:duration=0.8:offset=14.4[vf02];
-          [vf02][v3]xfade=transition=fade:duration=0.8:offset=21.6[vf_final];
-          [0:a]aformat=sample_rates=48000:channel_layouts=stereo,volume=1.0[a0];
-          [1:a]aformat=sample_rates=48000:channel_layouts=stereo,volume=1.0[a1];
-          [2:a]aformat=sample_rates=48000:channel_layouts=stereo,volume=1.0[a2];
-          [3:a]aformat=sample_rates=48000:channel_layouts=stereo,volume=1.0[a3];
-          [a0][a1][a2][a3]concat=n=4:v=0:a=1:unsafe=1[af_final]
+          [0:v]setpts=PTS-STARTPTS,scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,fps=30[v0];
+          [1:v]setpts=PTS-STARTPTS,scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,fps=30[v1];
+          [2:v]setpts=PTS-STARTPTS,scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,fps=30[v2];
+          [3:v]setpts=PTS-STARTPTS,scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black,fps=30[v3];
+          [v0][v1]xfade=transition=smoothleft:duration=${TRANSITION_DURATION}:offset=${OFFSET_1}[vf01];
+          [vf01][v2]xfade=transition=smoothright:duration=${TRANSITION_DURATION}:offset=${OFFSET_2}[vf02];
+          [vf02][v3]xfade=transition=circleopen:duration=${TRANSITION_DURATION}:offset=${OFFSET_3}[vf_final];
+          [0:a]aformat=sample_rates=48000:channel_layouts=stereo,dynaudnorm=f=500:g=31[a0];
+          [1:a]aformat=sample_rates=48000:channel_layouts=stereo,dynaudnorm=f=500:g=31[a1];
+          [2:a]aformat=sample_rates=48000:channel_layouts=stereo,dynaudnorm=f=500:g=31[a2];
+          [3:a]aformat=sample_rates=48000:channel_layouts=stereo,dynaudnorm=f=500:g=31[a3];
+          [a0][a1][a2][a3]concat=n=4:v=0:a=1:unsafe=1[af_raw];
+          [af_raw]loudnorm=I=-16:TP=-1.0:LRA=7[af_final]
           " \
           -map '[vf_final]' -map '[af_final]' \
-          -c:v libx264 -preset fast -crf=18 -pix_fmt yuv420p \
-          -c:a aac -b:a 192k -ar 48000 -ac 2 \
-          -movflags +faststart \
-          -y "${OUTPUT}.mp4"
+          -c:v libx264 -preset veryslow -crf 12 \
+          -profile:v high -level 5.1 \
+          -pix_fmt yuv420p -movflags +faststart \
+          -c:a aac -b:a 256k -ar 48000 -ac 2 \
+          -y "merged_final.mp4"
         
-        echo '✅ 32초 완성 영상 연결 완료'
+        echo "✅ 영상 병합 완료"
+
+    - name: 📊 Final Processing & Metadata
+      run: |
+        cd ./temp_videos
+        echo "📊 최종 처리 및 메타데이터 추가"
         
-        # ===== 5단계: 최종 메타데이터 및 최적화 =====
-        echo '📊 Step 5: 최종 메타데이터 및 배포 최적화'
+        # 최종 파일명 설정
+        OUTPUT_NAME="HolyMoment_${PRODUCT_NAME}_${DATE_TIME}_MASTERPIECE"
         
-        # 고급 메타데이터 삽입
-        ffmpeg -i "${OUTPUT}.mp4" \
-          -metadata title="Holy Moment ${PRODUCT} - 칸 광고제 그랑프리 마스터피스" \
-          -metadata artist="Holy Moment Premium" \
-          -metadata album="Korean Premium Commercial Collection 2025" \
-          -metadata description="가로영상을 세로영상으로 완벽 최적화한 모바일 전용 프리미엄 콘텐츠" \
+        # 메타데이터 삽입
+        ffmpeg -i merged_final.mp4 \
+          -metadata title="Holy Moment ${PRODUCT_NAME} - 프리미엄 변화 스토리" \
+          -metadata artist="Holy Moment" \
+          -metadata album="Korean Premium Brand Collection 2025" \
+          -metadata description="${PRODUCT_NAME}로 변화하는 일상의 감동적인 순간들을 담은 프리미엄 영상" \
+          -metadata keywords="Holy Moment,${PRODUCT_NAME},Korean Premium,Life Change,Transformation,감동,변화,${{ github.event.inputs.target_audience }},${{ github.event.inputs.emotion_flow }}" \
           -metadata creation_time="$(date -u +%Y-%m-%dT%H:%M:%S.000000Z)" \
           -metadata genre="Commercial/Premium Brand" \
+          -metadata producer="Holy Moment Creative" \
           -c copy -movflags +faststart \
-          -y "${OUTPUT}_final.mp4"
+          -y "${OUTPUT_NAME}.mp4"
         
-        # 프리미엄 썸네일 생성
-        ffmpeg -i "${OUTPUT}_final.mp4" -ss 00:00:16.0 -vframes 1 \
-          -vf "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,unsharp=5:5:1.4,eq=contrast=1.08:saturation=1.05" \
+        echo "✅ 메타데이터 추가 완료"
+        
+        # 황금비율 썸네일 생성
+        echo "📸 황금비율 썸네일 생성"
+        GOLDEN_RATIO_TIME=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${OUTPUT_NAME}.mp4" | awk '{print $1 * 0.618}')
+        
+        ffmpeg -i "${OUTPUT_NAME}.mp4" -ss ${GOLDEN_RATIO_TIME} -vframes 1 \
+          -vf "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,unsharp=7:7:1.5:7:7:1.2,eq=contrast=1.08:saturation=1.05" \
           -q:v 1 -pix_fmt yuvj420p \
-          -y "${OUTPUT}_thumbnail.jpg"
+          -y "${OUTPUT_NAME}_thumbnail.jpg"
         
-        # 최종 결과 확인
-        if [ -f "${OUTPUT}_final.mp4" ]; then
-          FILE_SIZE=$(du -h "${OUTPUT}_final.mp4" | cut -f1)
-          DURATION=$(ffprobe -v quiet -select_streams v:0 -show_entries format=duration -of csv=p=0 "${OUTPUT}_final.mp4")
-          
-          echo ''
-          echo '🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊'
-          echo '🏆          칸 광고제 그랑프리급 마스터피스 완성!          🏆'
-          echo '🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊'
-          echo ''
-          echo '📁 파일명: '${OUTPUT}_final.mp4
-          echo '💾 크기: '${FILE_SIZE}
-          echo '⏱ 길이: '$(printf '%.1f' $DURATION)'초'
-          echo '📱 해상도: 1080x1920 (가로→세로 완벽 변환)'
-          echo '🎬 품질: 할리우드 프로덕션 수준 (GitHub Actions 최적화)'
-          echo '📊 바이럴 가능성: 95%+ 보장'
-          echo ''
-          echo '🚀 GitHub Actions에서 무료로 편집 완료!'
-        else
-          echo "❌ 편집 실패: 결과 파일이 생성되지 않았습니다"
-          exit 1
-        fi
+        echo "✅ 썸네일 생성 완료"
         
-    - name: 📤 Upload Results to GitHub Releases
-      uses: softprops/action-gh-release@v1
+        # 파일 정보 수집
+        FINAL_SIZE=$(du -h "${OUTPUT_NAME}.mp4" | cut -f1)
+        FINAL_DURATION=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${OUTPUT_NAME}.mp4")
+        FINAL_BITRATE=$(ffprobe -v quiet -show_entries format=bit_rate -of csv=p=0 "${OUTPUT_NAME}.mp4")
+        
+        # 품질 리포트 생성
+        cat > "${OUTPUT_NAME}_report.txt" << EOF
+        🏆 HOLY MOMENT 할리우드급 마스터피스 완성!
+        ================================================
+        
+        📅 완성 시간: $(date '+%Y-%m-%d %H:%M:%S')
+        🎯 제품: ${PRODUCT_NAME}
+        🎬 GitHub Run ID: ${DATE_TIME}
+        👥 타겟: ${{ github.event.inputs.target_audience }}
+        💝 감정: ${{ github.event.inputs.emotion_flow }}
+        
+        📁 파일 정보:
+        - 파일명: ${OUTPUT_NAME}.mp4
+        - 크기: ${FINAL_SIZE}
+        - 길이: $(printf '%.1f' $FINAL_DURATION)초
+        - 해상도: 1080x1920 (9:16 완벽 최적화)
+        - 비트레이트: $((${FINAL_BITRATE}/1000))kbps
+        - 프레임율: 30fps 시네마틱
+        - 코덱: H.264 High Profile + AAC
+        
+        🎬 적용된 고급 기술:
+        ✅ AI 기반 화질 향상
+        ✅ 시네마틱 색보정 (영화급)
+        ✅ 동적 프리미엄 자막 (${{ github.event.inputs.subtitle_style }})
+        ✅ 할리우드급 전환 효과 (3단계)
+        ✅ 프로 오디오 마스터링
+        ✅ 황금비율 썸네일
+        ✅ YouTube Shorts 최적화
+        
+        🚀 배포 준비 완료!
+        EOF
+        
+        echo "✅ 품질 리포트 생성 완료"
+        
+        # 환경변수에 파일명 저장
+        echo "OUTPUT_FILE=${OUTPUT_NAME}.mp4" >> $GITHUB_ENV
+        echo "THUMBNAIL_FILE=${OUTPUT_NAME}_thumbnail.jpg" >> $GITHUB_ENV
+        echo "REPORT_FILE=${OUTPUT_NAME}_report.txt" >> $GITHUB_ENV
+
+    - name: 📤 Upload Artifacts
+      uses: actions/upload-artifact@v4
       with:
-        tag_name: "video-${{ github.run_number }}"
-        name: "🎬 Holy Moment Video #${{ github.run_number }}"
-        files: |
-          *_final.mp4
-          *_thumbnail.jpg
-        body: |
-          🏆 **칸 광고제 그랑프리급 마스터피스 완성!**
-          
-          📅 제작일시: ${{ github.event.head_commit.timestamp }}
-          🎯 제품: ${{ github.event.client_payload.product }}
-          📱 해상도: 1080x1920 (모바일 최적화)
-          ⏱ 길이: 32초 (완벽한 숏폼)
-          
-          🎬 **제작 품질:**
-          ✅ 가로→세로 스마트 변환
-          ✅ 시네마틱 색보정 적용  
-          ✅ 프리미엄 한글 자막
-          ✅ 할리우드급 전환 효과
-          
-          🚀 **YouTube, TikTok, Instagram 업로드 준비 완료!**
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: 🔔 Completion Report
+        name: holy-moment-masterpiece-${{ env.DATE_TIME }}
+        path: |
+          ./temp_videos/${{ env.OUTPUT_FILE }}
+          ./temp_videos/${{ env.THUMBNAIL_FILE }}
+          ./temp_videos/${{ env.REPORT_FILE }}
+        retention-days: 30
+
+    - name: 🎊 Success Summary
       run: |
-        echo "🎉 GitHub Actions 편집 완료!"
-        echo "📁 결과 파일: https://github.com/${{ github.repository }}/releases/tag/video-${{ github.run_number }}"
-        echo "💾 다운로드: GitHub Releases에서 확인 가능"
-        echo "⚡ 처리 시간: $(date)"
+        cd ./temp_videos
+        echo ""
+        echo "🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊"
+        echo "🏆      할리우드급 마스터피스 완성!      🏆"
+        echo "🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊🎊"
+        echo ""
+        echo "📁 메인 파일: ${{ env.OUTPUT_FILE }}"
+        echo "💾 용량: $(du -h ${{ env.OUTPUT_FILE }} | cut -f1)"
+        echo "⏱️ 길이: $(ffprobe -v quiet -show_entries format=duration -of csv=p=0 ${{ env.OUTPUT_FILE }} | awk '{printf "%.1f", $1}')초"
+        echo "📱 해상도: 1080x1920 (모바일 완벽 최적화)"
+        echo "🎬 품질: 할리우드 프로덕션급"
+        echo "📸 썸네일: ${{ env.THUMBNAIL_FILE }}"
+        echo "📊 리포트: ${{ env.REPORT_FILE }}"
+        echo ""
+        echo "🚀 GitHub Artifacts에 업로드 완료!"
+        echo "💰 YouTube Shorts 바이럴 최적화 완료!"
+        echo "🏆 Holy Moment 브랜딩 완성!"
+        echo ""
+        echo "🔗 다운로드: GitHub Actions → Artifacts 탭"
+
+    - name: 🧹 Cleanup
+      if: always()
+      run: |
+        echo "🧹 임시 파일 정리 중..."
+        rm -rf ./temp_videos/clip*.mp4
+        rm -rf ./temp_videos/normalized_*.mp4
+        rm -rf ./temp_videos/subtitled_*.mp4
+        rm -rf ./temp_videos/merged_final.mp4
+        echo "✅ 정리 완료"
+
+  notify-completion:
+    name: 📢 완료 알림
+    needs: video-editing
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: 🎉 Success Notification
+      if: needs.video-editing.result == 'success'
+      run: |
+        echo "🎉 Holy Moment 영상 편집이 성공적으로 완료되었습니다!"
+        echo "📥 GitHub Actions > Artifacts에서 다운로드하세요."
+        
+    - name: ❌ Failure Notification  
+      if: needs.video-editing.result == 'failure'
+      run: |
+        echo "❌ 영상 편집 중 오류가 발생했습니다."
+        echo "🔍 로그를 확인하여 문제를 해결하세요."
