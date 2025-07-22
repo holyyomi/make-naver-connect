@@ -23,6 +23,14 @@ on:
         description: '네 번째 영상 URL'
         required: true
         type: string
+      webhook_url:
+        description: 'Make.com 웹훅 URL'
+        required: true
+        type: string
+      make_execution_id:
+        description: 'Make 실행 ID'
+        required: false
+        type: string
       subtitle_style:
         description: '자막 스타일'
         required: false
@@ -196,7 +204,7 @@ jobs:
           "이렇게 힘들 줄 몰랐어..."
           "${{ env.PRODUCT_NAME }}을(를) 만난 순간"
           "완전히 달라진 내 일상"
-          "정말 감사한 Holy Moment"
+          "Holy Every Moments"
         )
         
         # 자막 스타일 설정
@@ -343,35 +351,35 @@ jobs:
         
         # 품질 리포트 생성
         cat > "${OUTPUT_NAME}_report.txt" << EOF
-        🏆 HOLY MOMENT 할리우드급 마스터피스 완성!
-        ================================================
-        
-        📅 완성 시간: $(date '+%Y-%m-%d %H:%M:%S')
-        🎯 제품: ${PRODUCT_NAME}
-        🎬 GitHub Run ID: ${DATE_TIME}
-        👥 타겟: ${{ github.event.inputs.target_audience }}
-        💝 감정: ${{ github.event.inputs.emotion_flow }}
-        
-        📁 파일 정보:
-        - 파일명: ${OUTPUT_NAME}.mp4
-        - 크기: ${FINAL_SIZE}
-        - 길이: $(printf '%.1f' $FINAL_DURATION)초
-        - 해상도: 1080x1920 (9:16 완벽 최적화)
-        - 비트레이트: $((${FINAL_BITRATE}/1000))kbps
-        - 프레임율: 30fps 시네마틱
-        - 코덱: H.264 High Profile + AAC
-        
-        🎬 적용된 고급 기술:
-        ✅ AI 기반 화질 향상
-        ✅ 시네마틱 색보정 (영화급)
-        ✅ 동적 프리미엄 자막 (${{ github.event.inputs.subtitle_style }})
-        ✅ 할리우드급 전환 효과 (3단계)
-        ✅ 프로 오디오 마스터링
-        ✅ 황금비율 썸네일
-        ✅ YouTube Shorts 최적화
-        
-        🚀 배포 준비 완료!
-        EOF
+🏆 HOLY MOMENT 할리우드급 마스터피스 완성!
+================================================
+
+📅 완성 시간: $(date '+%Y-%m-%d %H:%M:%S')
+🎯 제품: ${PRODUCT_NAME}
+🎬 GitHub Run ID: ${DATE_TIME}
+👥 타겟: ${{ github.event.inputs.target_audience }}
+💝 감정: ${{ github.event.inputs.emotion_flow }}
+
+📁 파일 정보:
+- 파일명: ${OUTPUT_NAME}.mp4
+- 크기: ${FINAL_SIZE}
+- 길이: $(printf '%.1f' $FINAL_DURATION)초
+- 해상도: 1080x1920 (9:16 완벽 최적화)
+- 비트레이트: $((${FINAL_BITRATE}/1000))kbps
+- 프레임율: 30fps 시네마틱
+- 코덱: H.264 High Profile + AAC
+
+🎬 적용된 고급 기술:
+✅ AI 기반 화질 향상
+✅ 시네마틱 색보정 (영화급)
+✅ 동적 프리미엄 자막 (${{ github.event.inputs.subtitle_style }})
+✅ 할리우드급 전환 효과 (3단계)
+✅ 프로 오디오 마스터링
+✅ 황금비율 썸네일
+✅ YouTube Shorts 최적화
+
+🚀 배포 준비 완료!
+EOF
         
         echo "✅ 품질 리포트 생성 완료"
         
@@ -379,6 +387,38 @@ jobs:
         echo "OUTPUT_FILE=${OUTPUT_NAME}.mp4" >> $GITHUB_ENV
         echo "THUMBNAIL_FILE=${OUTPUT_NAME}_thumbnail.jpg" >> $GITHUB_ENV
         echo "REPORT_FILE=${OUTPUT_NAME}_report.txt" >> $GITHUB_ENV
+
+    - name: 📤 Notify Make.com Completion
+      if: success()
+      run: |
+        cd ./temp_videos
+        
+        # Make.com으로 완료 알림 전송
+        curl -X POST "${{ github.event.inputs.webhook_url }}" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"status\": \"completed\",
+            \"product_name\": \"${{ env.PRODUCT_NAME }}\",
+            \"output_file\": \"${{ env.OUTPUT_FILE }}\",
+            \"thumbnail_file\": \"${{ env.THUMBNAIL_FILE }}\",
+            \"artifacts_url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\",
+            \"download_url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts\",
+            \"execution_id\": \"${{ github.event.inputs.make_execution_id }}\",
+            \"file_size\": \"$(du -h ${{ env.OUTPUT_FILE }} | cut -f1)\",
+            \"duration\": \"$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 ${{ env.OUTPUT_FILE }} | awk '{printf \"%.1f\", $1}')\"
+          }"
+
+    - name: 📤 Notify Make.com on Failure  
+      if: failure()
+      run: |
+        curl -X POST "${{ github.event.inputs.webhook_url }}" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"status\": \"failed\",
+            \"error\": \"Video editing failed\",
+            \"execution_id\": \"${{ github.event.inputs.make_execution_id }}\",
+            \"logs_url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
+          }"
 
     - name: 📤 Upload Artifacts
       uses: actions/upload-artifact@v4
@@ -440,35 +480,3 @@ jobs:
       run: |
         echo "❌ 영상 편집 중 오류가 발생했습니다."
         echo "🔍 로그를 확인하여 문제를 해결하세요."
-
-- name: 📤 Notify Make.com Completion
-  if: success()
-  run: |
-    cd ./temp_videos
-    
-    # Make.com으로 완료 알림 전송
-    curl -X POST "${{ github.event.client_payload.webhook_url }}" \
-      -H "Content-Type: application/json" \
-      -d "{
-        \"status\": \"completed\",
-        \"product_name\": \"${{ env.PRODUCT_NAME }}\",
-        \"output_file\": \"${{ env.OUTPUT_FILE }}\",
-        \"thumbnail_file\": \"${{ env.THUMBNAIL_FILE }}\",
-        \"artifacts_url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\",
-        \"download_url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts\",
-        \"execution_id\": \"${{ github.event.client_payload.make_execution_id }}\",
-        \"file_size\": \"$(du -h ${{ env.OUTPUT_FILE }} | cut -f1)\",
-        \"duration\": \"$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 ${{ env.OUTPUT_FILE }} | awk '{printf \"%.1f\", $1}')\"
-      }"
-
-- name: 📤 Notify Make.com on Failure  
-  if: failure()
-  run: |
-    curl -X POST "${{ github.event.client_payload.webhook_url }}" \
-      -H "Content-Type: application/json" \
-      -d "{
-        \"status\": \"failed\",
-        \"error\": \"Video editing failed\",
-        \"execution_id\": \"${{ github.event.client_payload.make_execution_id }}\",
-        \"logs_url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
-      }"
