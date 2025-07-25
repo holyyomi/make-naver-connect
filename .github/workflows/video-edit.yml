@@ -175,6 +175,24 @@ jobs:
           ./temp_videos/${{ env.REPORT_FILE }}
         retention-days: 30
 
+    - name: 🖼 Create Thumbnail with Emotion Text
+      run: |
+        cd ./temp_videos
+        # 영상에서 썸네일 추출 (1.5초 지점)
+        ffmpeg -i merged_final.mp4 -ss 00:00:01.500 -vframes 1 thumbnail_raw.jpg
+
+        # 감성 후킹 문구 설정
+        HOOK_TEXT="${{ github.event.inputs.hook_text }}"
+
+        # 텍스트 입힌 감성 썸네일 생성
+        convert thumbnail_raw.jpg \
+          -gravity south \
+          -fill white -undercolor '#00000088' \
+          -font "Noto-Sans-CJK-Regular" \
+          -pointsize 64 \
+          -annotate +0+40 "$HOOK_TEXT" \
+          "${OUTPUT_NAME}_thumbnail.jpg"
+
     - name: 🎊 Success Summary
       run: |
         echo "🎊 성공!"
