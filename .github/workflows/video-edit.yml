@@ -1,4 +1,4 @@
-name: 🎬 Holy Moment Video Editor Workflow
+name: 🎮 Holy Moment Video Editor Workflow
 
 on:
   workflow_dispatch:
@@ -32,7 +32,7 @@ on:
         required: false
         type: string
       subtitle_style:
-        description: '자막 스타일'
+        description: '자림 스타일'
         required: false
         default: 'premium_modern'
         type: choice
@@ -42,7 +42,7 @@ on:
         - vibrant_impact
         - friendly_casual
       target_audience:
-        description: '타겟 연령층'
+        description: '타겟 연병칼'
         required: false
         default: '20-30대'
         type: string
@@ -58,10 +58,10 @@ env:
 
 jobs:
   video-editing:
-    name: 🎬 할리우드급 영상 편집
+    name: 🎮 할리우드깍 영상 편집
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    
+
     steps:
     - name: 🔧 Checkout Repository
       uses: actions/checkout@v4
@@ -81,7 +81,7 @@ jobs:
         sudo apt-get install -y fonts-noto-cjk fonts-noto-cjk-extra
         fc-cache -fv
 
-    - name: 📥 Download Video Files
+    - name: 📅 Download Video Files
       run: |
         mkdir -p ./temp_videos && cd ./temp_videos
         curl -L -o "clip1.mp4" "${{ github.event.inputs.video_1_url }}"
@@ -117,6 +117,14 @@ jobs:
       run: |
         cd ./temp_videos
         ffmpeg -i subtitled_1.mp4 -i subtitled_2.mp4 -i subtitled_3.mp4 -i subtitled_4.mp4 -filter_complex "[0:v][1:v][2:v][3:v]concat=n=4:v=1:a=0[outv]" -map "[outv]" -y merged_final.mp4
+
+    - name: 💬 경제적 이해관계 자림 삽입
+      run: |
+        cd ./temp_videos
+        ffmpeg -i merged_final.mp4 \
+        -vf "drawtext=text='이 영상은 네이버 새플 컨네트 활동의 일한으로 제작되었으며,':fontfile='/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc':fontsize=42:fontcolor=white:box=1:boxcolor=black@0.6:boxborderw=12:x=(w-text_w)/2:y=(h/2)-50:enable='between(t,1,3.5)',drawtext=text='판매 발생 시 수수료를 제공받을 수 있습니다.':fontfile='/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc':fontsize=42:fontcolor=white:box=1:boxcolor=black@0.6:boxborderw=12:x=(w-text_w)/2:y=(h/2)+10:enable='between(t,1,3.5)'" \
+        -c:a copy -y merged_final_notice.mp4
+        mv merged_final_notice.mp4 merged_final.mp4
 
     - name: 📊 Final Processing & Metadata
       run: |
@@ -171,7 +179,7 @@ jobs:
       run: |
         echo "🎊 성공!"
 
-    - name: 🧹 Cleanup
+    - name: 🪟 Cleanup
       if: always()
       run: |
         rm -rf ./temp_videos/
